@@ -1,10 +1,18 @@
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { tokenize } from '../utils/text.js';
+import { TtlCache } from '../utils/cache.js';
+import { productImageBlock, productImageKey } from '../utils/image.js';
+import crypto from 'node:crypto';
+
+const brainCache = new TtlCache({ max: 200, ttlMs: config.cacheTtlMs });
+export const clearBrainCache = () => brainCache.clear();
 
 const SYSTEM = `You help find short-form videos about a specific product.
 Given a product title, description and (optionally) its main image, return ONLY JSON:
 {
+ "product_name": string,           // short product name as a shopper would search it, e.g. "oversized graphic tee"
+ "summary": string,                // one sentence on what is visible: type, colours, prints/logos, material, shape
  "category": string,
  "attributes": { "color": string[], "material": string[], "style": string[], "shape": string[], "use_case": string[], "brand": string },
  "keywords": string[],            // 6-12 distinctive words a video caption about this product would contain
@@ -20,6 +28,8 @@ export function heuristicBrain(product) {
   const tags = words.slice(0, 6);
   return {
     source: 'heuristic',
+    productName: product.title || '',
+    summary: '',
     category: '',
     attributes: { color: [], material: [], style: [], shape: [], use_case: [], brand: product.brand || '' },
     keywords: words.slice(0, 12),
@@ -37,6 +47,8 @@ function normalizeBrain(raw, product) {
   const arr = (v) => (Array.isArray(v) ? v.map(String).filter(Boolean) : []);
   return {
     source: 'vision',
+    productName: String(raw.product_name || product.title || ''),
+    summary: String(raw.summary || ''),
     category: String(raw.category || ''),
     attributes: {
       color: arr(raw.attributes?.color),
@@ -58,11 +70,23 @@ function normalizeBrain(raw, product) {
 
 export async function runImageBrain(product) {
   if (!config.anthropic.apiKey) return heuristicBrain(product);
+  const key = crypto
+    .createHash('sha1')
+    .update([product.title, product.brand, product.description, productImageKey(product)].join('|'))
+    .digest('hex');
+  // Same product link / image is analysed once, repeat searches reuse it.
+  const out = await brainCache.getOrSet(key, () => callVision(product));
+  if (out.degraded) brainCache.delete(key);
+  return out;
+}
+
+async function callVision(product) {
   const content = [];
-  if (product.imageUrl) content.push({ type: 'image', source: { type: 'url', url: product.imageUrl } });
+  const img = productImageBlock(product);
+  if (img) content.push(img);
   content.push({
     type: 'text',
-    text: `Title: ${product.title}\nBrand: ${product.brand || 'unknown'}\nDescription: ${product.description || 'none'}`,
+    text: `Title: ${product.title || 'unknown (identify it from the image)'}\nBrand: ${product.brand || 'unknown'}\nDescription: ${product.description || 'none'}`,
   });
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -80,8 +104,10 @@ export async function runImageBrain(product) {
     const text = data.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
     return normalizeBrain(JSON.parse(text.replace(/```json|```/g, '').trim()), product);
   } catch (err) {
-    // Never fail the whole search because the brain is down: degrade to the heuristic.
+    // Never fail the whole search because the brain is down: degrade to the heuristic (and do not cache it).
     logger.warn({ err: err.message }, 'image brain failed, using heuristic');
-    return heuristicBrain(product);
+    const fb = heuristicBrain(product);
+    fb.degraded = true;
+    return fb;
   }
 }
