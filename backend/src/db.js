@@ -65,6 +65,26 @@ export function openDb(file = config.dbPath) {
       const r = db.prepare('SELECT payload_json FROM searches WHERE id = ?').get(id);
       return r ? JSON.parse(r.payload_json) : null;
     },
+    /** Videos returned by earlier searches of the same product (for the "show previously seen" toggle). */
+    getEarlierVideos: (searchId) => {
+      const cur = db.prepare('SELECT product_key FROM searches WHERE id = ?').get(searchId);
+      if (!cur) return null;
+      const rows = db.prepare('SELECT id, payload_json FROM searches WHERE product_key = ? AND id < ? ORDER BY id DESC').all(cur.product_key, searchId);
+      const out = {};
+      const seen = new Set();
+      for (const r of rows) {
+        const payload = JSON.parse(r.payload_json);
+        for (const [source, vids] of Object.entries(payload.results || {})) {
+          for (const v of vids) {
+            const key = `${v.source}:${v.id}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            (out[source] ||= []).push({ ...v, previouslySeen: true, fromSearchId: r.id });
+          }
+        }
+      }
+      return out;
+    },
     clearAll: () => db.exec('DELETE FROM searches; DELETE FROM seen_videos; DELETE FROM cursors;'),
   };
 }
