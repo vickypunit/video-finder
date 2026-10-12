@@ -72,6 +72,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem 1.25rem; display: grid; gap: 0.85rem; align-content: start; min-width: 0; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }
 .banner { border-radius: 8px; padding: 0.65rem 0.9rem; font-size: 0.88rem; border: 1px solid; }
+.info-banner { background: var(--accent-soft); border-color: #d4d0fb; color: var(--accent-ink); }
 .warn-banner { background: var(--mid-bg); border-color: #f0d9a8; color: #6b3f00; }
 .err-banner { background: var(--bad-bg); border-color: #f3c4c8; color: var(--bad); font-weight: 500; }
 .empty { padding: 2rem; gap: 1rem; max-width: 720px; } .empty p { max-width: 62ch; }
@@ -174,3 +175,38 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .topbar { position: static; }
   .filter { width: 100%; }
 }
+
+/* ---------- upload, progress, thumbnails, flags ---------- */
+.upload { position: relative; cursor: pointer; padding: 0.4rem 0.8rem; }
+.upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.upload:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+.img-chip { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.img-chip img { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; border: 1px solid var(--line); }
+.icon-btn.sm { width: 26px; height: 26px; margin-left: 0; }
+.icon-btn.sm svg { width: 13px; height: 13px; }
+.steps { list-style: none; margin: 0.3rem 0 0.5rem; padding: 0; display: grid; gap: 0.55rem; }
+.step { display: grid; grid-template-columns: 26px 1fr; gap: 0.2rem 0.6rem; align-items: center; color: var(--muted); }
+.step-dot { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 0.78rem; font-weight: 700; background: var(--line-2); }
+.step.done { color: var(--ink); } .step.done .step-dot { background: var(--good-bg); color: var(--good); }
+.step.now { color: var(--ink); font-weight: 600; } .step.now .step-dot { background: var(--accent); color: #fff; }
+.step-sub { grid-column: 2; display: grid; gap: 0.35rem; font-weight: 400; }
+.step-src { display: grid; grid-template-columns: 110px 1fr 56px; align-items: center; gap: 0.6rem; font-size: 0.85rem; }
+.step-src b { text-align: right; font-variant-numeric: tabular-nums; }
+.vc-wrap { display: flex; gap: 0.7rem; align-items: center; }
+.thumb { width: 40px; height: 54px; border-radius: 6px; object-fit: cover; background: var(--line-2); flex: none; border: 1px solid var(--line); }
+.thumb-empty { display: grid; place-items: center; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); }
+.vthumb { width: 100%; height: 150px; border-radius: 8px; object-fit: cover; background: var(--line-2); }
+.vthumb.thumb-empty { font-size: 0.8rem; }
+.d-thumb { width: 100%; max-height: 260px; object-fit: contain; border-radius: 10px; background: var(--line-2); }
+.player { width: 100%; height: 420px; border: 1px solid var(--line); border-radius: 10px; background: #000; }
+.why { color: var(--muted); font-size: 0.8rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
+.vcard .why { white-space: normal; max-width: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.d-why { background: var(--accent-soft); border-radius: 8px; padding: 0.6rem 0.8rem; font-size: 0.9rem; }
+.tag.bad { background: var(--bad-bg); color: var(--bad); } .tag.seen { background: #e8ebf3; color: #475069; }
+.dim { opacity: 0.62; } .dim:hover { opacity: 1; }
+.btn-sm.disabled, .btn.disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+.check { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted); font-size: 0.85rem; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.vcard-top { gap: 0.4rem; flex-wrap: wrap; justify-content: flex-start; }
+.vcard-top .src-badge { margin-right: auto; }
+@media (max-width: 1100px) { .topbar .cmd { max-width: none; } .step-src { grid-template-columns: 90px 1fr 52px; } }

@@ -3,12 +3,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { SOURCES, downloadCsv } from '../lib/format';
 import Sidebar from '../components/Sidebar';
+import Progress from '../components/Progress';
 import { Kpis, Coverage } from '../components/StatCards';
 import BrainPanel from '../components/BrainPanel';
 import VideoTable from '../components/VideoTable';
 import VideoCard from '../components/VideoCard';
 import VideoDrawer from '../components/VideoDrawer';
-import { SearchIcon, TableIcon, GridIcon, DownloadIcon } from '../components/Icons';
+import { SearchIcon, TableIcon, GridIcon, DownloadIcon, CloseIcon } from '../components/Icons';
 
 const PAGE_SIZE = 20;
 const EXAMPLES = ['Stanley Quencher Tumbler', 'Sony WH-1000XM5 headphones', 'Lodge cast iron skillet'];
@@ -28,6 +29,11 @@ export default function Home() {
   const [view, setView] = useState('table');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
+  const [image, setImage] = useState(null); // { name, dataUrl } optional product photo
+  const [events, setEvents] = useState([]);
+  const [hideLow, setHideLow] = useState(false);
+  const [showSeen, setShowSeen] = useState(false);
+  const [prev, setPrev] = useState(null);
 
   const refreshHistory = useCallback(() => api.history().then((r) => setHistory(r.searches)).catch(() => {}), []);
   useEffect(() => {
@@ -35,18 +41,31 @@ export default function Home() {
     refreshHistory();
   }, [refreshHistory]);
 
-  async function runSearch(value = input) {
-    setError(''); setLoading(true); setSelected(null);
+  async function runSearch(value = input, img = image) {
+    setError(''); setLoading(true); setSelected(null); setEvents([]); setShowSeen(false); setPrev(null);
     try {
-      const r = await api.search(value, sources);
+      const r = await api.search({ input: value, image: img?.dataUrl, sources }, (e) => setEvents((list) => [...list, e]));
       setData(r); setTab('all'); setText('');
       refreshHistory();
     } catch (err) { setError(err.message); } finally { setLoading(false); }
   }
 
+  function onPickImage(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const max = cfg?.maxUploadBytes || 1.5 * 1024 * 1024;
+    if (!/^image\/(png|jpe?g|webp|gif)$/.test(file.type)) { setError('Upload a PNG, JPEG, WebP or GIF image.'); return; }
+    if (file.size > max) { setError(`That image is ${(file.size / 1024 / 1024).toFixed(1)} MB. Use one under ${(max / 1024 / 1024).toFixed(1)} MB.`); return; }
+    setError('');
+    const reader = new FileReader();
+    reader.onload = () => setImage({ name: file.name, dataUrl: reader.result });
+    reader.readAsDataURL(file);
+  }
+
   async function openHistory(id) {
     setError(''); setSelected(null);
-    try { setData(await api.historyItem(id)); setTab('all'); setText(''); } catch (err) { setError(err.message); }
+    try { setData(await api.historyItem(id)); setTab('all'); setText(''); setShowSeen(false); setPrev(null); } catch (err) { setError(err.message); }
   }
 
   async function clearHistory() {
@@ -54,21 +73,31 @@ export default function Home() {
     await api.clearHistory(); setHistory([]); setData(null);
   }
 
+  // "Show previously seen": old results of the same product are fetched on demand
+  useEffect(() => {
+    if (!showSeen || !data?.id || prev) return;
+    api.previous(data.id).then((r) => setPrev(r.results)).catch((err) => { setError(err.message); setShowSeen(false); });
+  }, [showSeen, data, prev]);
+  const prevCount = prev ? Object.values(prev).flat().length : 0;
+
   const filtered = useMemo(() => {
     if (!data) return [];
     const q = text.trim().toLowerCase();
-    const list = Object.values(data.results).flat().filter((v) =>
-      (tab === 'all' || v.source === tab) && v.matchScore >= minScore &&
+    const pool = [...Object.values(data.results).flat(), ...(showSeen && prev ? Object.values(prev).flat() : [])];
+    const list = pool.filter((v) =>
+      (tab === 'all' || v.source === tab) && v.matchScore >= minScore && !(hideLow && v.lowMatch) &&
       (!q || `${v.caption} ${v.author} ${v.title}`.toLowerCase().includes(q)));
     const val = (v) => (sort.key === 'postedAt' ? new Date(v.postedAt || 0).getTime() : v[sort.key] || 0);
     return list.sort((a, b) => (sort.dir === 'desc' ? val(b) - val(a) : val(a) - val(b)));
-  }, [data, tab, minScore, text, sort]);
+  }, [data, tab, minScore, text, sort, hideLow, showSeen, prev]);
 
-  useEffect(() => setPage(1), [data, tab, minScore, text, sort, view]);
+  useEffect(() => setPage(1), [data, tab, minScore, text, sort, view, hideLow, showSeen]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const toggleSort = (key) => setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }));
   const total = data ? Object.values(data.results).flat().length : 0;
+  const lowCount = data ? Object.values(data.results).flat().filter((v) => v.lowMatch).length : 0;
+  const canSearch = !loading && (input.trim().length >= 2 || Boolean(image));
   const closeDrawer = useCallback(() => setSelected(null), []);
 
   return (
@@ -83,8 +112,21 @@ export default function Home() {
             <SearchIcon className="cmd-icon" />
             <input id="q" value={input} onChange={(e) => setInput(e.target.value)} autoComplete="off"
               placeholder="Product name, or a link to the product page" />
-            <button type="submit" className="btn primary" disabled={loading || input.trim().length < 2}>{loading ? 'Searching' : 'Search'}</button>
+            <label className="btn upload" title="Optional: add a product photo">
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={onPickImage} disabled={loading} />
+              Add photo
+            </label>
+            <button type="submit" className="btn primary" disabled={!canSearch}>{loading ? 'Searching' : 'Search'}</button>
           </form>
+          {image && (
+            <div className="img-chip">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={image.dataUrl} alt="" />
+              <span className="small">{image.name}</span>
+              <button className="icon-btn sm" onClick={() => setImage(null)} aria-label="Remove photo"><CloseIcon /></button>
+              <span className="muted small">{input.trim() ? 'Used as the reference photo' : 'Searching from the photo alone'}</span>
+            </div>
+          )}
           <div className="srcs" role="group" aria-label="Video sources">
             {Object.keys(SOURCES).filter((id) => id !== 'tiktok' || cfg?.tiktokEnabled).map((id) => (
               <label key={id} className={sources[id] ? 'src-toggle on' : 'src-toggle'}>
@@ -99,18 +141,12 @@ export default function Home() {
           {error && <div role="alert" className="banner err-banner">{error}</div>}
           {cfg?.providerMode === 'mock' && <div className="banner warn-banner">Sample data mode: results are generated for testing, not real posts. Set PROVIDER_MODE=live in backend/.env for real videos.</div>}
 
-          {loading && (
-            <div className="panel loading" aria-live="polite">
-              <div className="load-bar" />
-              <p><b>Collecting videos</b></p>
-              <p className="muted small">Reading the product, building queries, then pulling pages from each source. This can take up to a minute.</p>
-            </div>
-          )}
+          {loading && <Progress events={events} sources={sources} min={cfg?.minPerSource || 20} />}
 
           {!data && !loading && (
             <div className="panel empty">
               <h1>Find videos that show your product</h1>
-              <p className="muted">Enter a product name or paste a product page link. You get at least 20 Instagram Reels and 20 Meta ads, ranked by match. Search the same product again to get videos you have not seen.</p>
+              <p className="muted">Enter a product name, paste a product page link, or add a product photo. You get at least 20 Instagram Reels and 20 Meta ads, ranked by match. Search the same product again to get videos you have not seen.</p>
               <div className="examples">
                 <span className="muted small">Try</span>
                 {EXAMPLES.map((e) => <button key={e} className="chip-btn" onClick={() => { setInput(e); runSearch(e); }}>{e}</button>)}
@@ -129,7 +165,8 @@ export default function Home() {
                 <BrainPanel data={data} />
                 <Coverage data={data} min={cfg?.minPerSource || 20} />
               </div>
-              {data.warnings.length > 0 && <div className="banner warn-banner">{data.warnings.join(' ')}</div>}
+              {data.warnings.length > 0 && <div className="banner warn-banner" role="alert">{data.warnings.join(' ')} You can switch that source off, wait a minute, or search again for more.</div>}
+              {data.notes?.length > 0 && <div className="banner info-banner">{data.notes.join(' ')}</div>}
 
               <section className="panel results" aria-label="Videos">
                 <div className="toolbar">
@@ -137,7 +174,7 @@ export default function Home() {
                     {['all', ...Object.keys(data.results)].map((s) => (
                       <button key={s} role="tab" aria-selected={tab === s} className={tab === s ? 'tab on' : 'tab'} onClick={() => setTab(s)}>
                         {s === 'all' ? 'All' : SOURCES[s]?.short || s}
-                        <span className="count">{s === 'all' ? total : data.results[s].length}</span>
+                        <span className="count">{s === 'all' ? total : `${data.results[s].length}/${cfg?.minPerSource || 20}`}</span>
                       </button>
                     ))}
                   </div>
@@ -146,6 +183,8 @@ export default function Home() {
                     <label className="range">Min match <b>{minScore}</b>
                       <input type="range" min="0" max="100" step="5" value={minScore} onChange={(e) => setMinScore(+e.target.value)} />
                     </label>
+                    <label className="check"><input type="checkbox" checked={hideLow} onChange={(e) => setHideLow(e.target.checked)} /> Hide low matches{lowCount ? ` (${lowCount})` : ''}</label>
+                    <label className="check"><input type="checkbox" checked={showSeen} onChange={(e) => setShowSeen(e.target.checked)} /> Show previously seen{showSeen && prev ? ` (${prevCount})` : ''}</label>
                     <label className="sel">Sort
                       <select value={sort.key} onChange={(e) => setSort({ key: e.target.value, dir: 'desc' })}>
                         <option value="matchScore">Best match</option><option value="postedAt">Most recent</option>
@@ -161,7 +200,7 @@ export default function Home() {
                 </div>
 
                 {filtered.length === 0 ? (
-                  <p className="muted pad">No videos match these filters. Lower the minimum match or clear the filter.</p>
+                  <p className="muted pad">No videos match these filters. Lower the minimum match, show low matches, or clear the filter.</p>
                 ) : view === 'table' ? (
                   <VideoTable videos={pageItems} sort={sort} onSort={toggleSort} onSelect={setSelected} />
                 ) : (

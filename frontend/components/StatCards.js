@@ -4,13 +4,14 @@ export function Kpis({ data }) {
   const all = Object.values(data.results).flat();
   const stats = Object.values(data.stats);
   const avg = all.length ? Math.round(all.reduce((a, v) => a + v.matchScore, 0) / all.length) : 0;
-  const strong = all.filter((v) => v.matchScore >= 65).length;
+  const threshold = data.threshold ?? 40;
+  const strong = all.filter((v) => !v.lowMatch).length;
   const dup = stats.reduce((a, s) => a + s.droppedDuplicate, 0);
   const seen = stats.reduce((a, s) => a + s.droppedSeen, 0);
   const items = [
     ['Videos found', all.length, `across ${stats.length} sources`],
     ['Average match', avg, 'out of 100'],
-    ['Strong matches', strong, 'score 65 or higher'],
+    ['Strong matches', strong, `score ${threshold} or higher`],
     ['Filtered out', dup + seen, `${seen} seen before, ${dup} duplicates`],
   ];
   return (
@@ -42,7 +43,7 @@ export function Coverage({ data, min }) {
                 <span className="cov-count">{s.count} / {min}</span>
               </div>
               <div className="meter"><i style={{ width: `${Math.min(100, (s.count / min) * 100)}%` }} /></div>
-              <p className="muted small">{s.pages} page{s.pages === 1 ? '' : 's'} read, {s.droppedSeen} seen before, {s.droppedDuplicate} duplicates removed</p>
+              <p className="muted small">{s.pages} page{s.pages === 1 ? '' : 's'} read, {s.strong ?? s.count} strong matches, {s.droppedSeen} seen before, {s.droppedDuplicate} duplicates removed{s.retries ? `, ${s.retries} retr${s.retries === 1 ? 'y' : 'ies'}` : ''}</p>
               {s.error && <p className="err small">{s.error}</p>}
             </div>
           );
