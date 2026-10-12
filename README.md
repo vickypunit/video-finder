@@ -5,7 +5,7 @@ looks like and how people talk about it, then collects at least **20 Instagram R
 videos** that match, scores each one from 0 to 100, removes anything you have already seen, and shows the result
 in a dashboard. Search the same product again and you get new videos.
 
-* Backend: Node.js 20+ (Express, SQLite via better-sqlite3, zod, pino)
+* Backend: Node.js 22.13+ (Express, built-in node:sqlite, zod, pino)
 * Frontend: Next.js 14 (App Router, React)
 
 ## Setup
