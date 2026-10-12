@@ -1,0 +1,27 @@
+# One command: docker compose up --build   (then open http://localhost:3000)
+# Without backend/.env the app starts in PROVIDER_MODE=mock (sample data). For real results copy
+# backend/.env.example to backend/.env, add your keys and set PROVIDER_MODE=live.
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      PORT: 4000
+      DB_PATH: /data/app.db
+    volumes:
+      - video-finder-data:/data
+    ports:
+      - "4000:4000"
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:4000
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+volumes:
+  video-finder-data:
