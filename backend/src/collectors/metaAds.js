@@ -20,7 +20,7 @@ export const metaAds = {
   id: 'meta_ads',
   async collectPage({ queries, cursor }) {
     if (config.providerMode === 'mock') return mockPage('meta_ads', queries, cursor);
-    if (!config.meta.token) throw new Error('Meta Ad Library token is not configured.');
+    if (!config.meta.token) throw Object.assign(new Error('Meta Ad Library token is not configured.'), { noRetry: true });
     const url = new URL('https://graph.facebook.com/v21.0/ads_archive');
     url.searchParams.set('search_terms', queries[0]);
     url.searchParams.set('ad_reached_countries', JSON.stringify(config.meta.countries));
@@ -33,7 +33,11 @@ export const metaAds = {
     const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body?.error?.message || `Meta Ad Library API ${res.status}`);
+      const err = new Error(body?.error?.message || `Meta Ad Library API ${res.status}`);
+      err.status = res.status;
+      err.rateLimited = res.status === 429 || [4, 17, 32, 613].includes(body?.error?.code);
+      if (res.status < 500) err.noRetry = true;
+      throw err;
     }
     const data = await res.json();
     const items = (data.data || []).map((a) => ({

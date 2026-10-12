@@ -22,4 +22,18 @@ export const config = {
   minPerSource: int(process.env.MIN_VIDEOS_PER_SOURCE, 20),
   maxPages: int(process.env.MAX_PAGES_PER_SOURCE, 8),
   rateLimitPerMinute: int(process.env.RATE_LIMIT_PER_MINUTE, 20),
+  // scoring / visual matching
+  matchThreshold: int(process.env.MATCH_THRESHOLD, 40), // below this a video is flagged "low match"
+  visualBatchSize: int(process.env.VISUAL_BATCH_SIZE, 6),
+  maxVisualVideos: int(process.env.MAX_VISUAL_VIDEOS, 60),
+  enrichThumbnails: bool(process.env.ENRICH_THUMBNAILS, false), // best-effort og:image lookup, see README
+  // reliability
+  pageTimeoutMs: int(process.env.PAGE_TIMEOUT_MS, 20000),
+  sourceTimeoutMs: int(process.env.SOURCE_TIMEOUT_MS, 90000),
+  collectorRetries: int(process.env.COLLECTOR_RETRIES, 2),
+  cacheTtlMs: int(process.env.CACHE_TTL_MS, 15 * 60 * 1000),
+  // jobs / uploads
+  jobConcurrency: int(process.env.JOB_CONCURRENCY, 2),
+  jobTtlMs: int(process.env.JOB_TTL_MS, 60 * 60 * 1000),
+  maxUploadBytes: int(process.env.MAX_UPLOAD_BYTES, 1.5 * 1024 * 1024),
 };

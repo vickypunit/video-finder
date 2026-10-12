@@ -12,10 +12,11 @@ async function graph(path, params) {
     const body = await res.json().catch(() => ({}));
     // 4, 17, 32, 613 = Graph API rate limit codes
     const err = new Error(body?.error?.message || `Instagram API ${res.status}`);
-    err.rateLimited = [4, 17, 32, 613].includes(body?.error?.code);
+    err.rateLimited = res.status === 429 || [4, 17, 32, 613].includes(body?.error?.code);
+    err.noRetry = true; // bad token / permissions will not fix themselves
     throw err;
   }
-  if (!res.ok) throw new Error(`Instagram API ${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(`Instagram API ${res.status}`), { status: res.status });
   return res.json();
 }
 
@@ -30,7 +31,9 @@ export const instagram = {
   async collectPage({ queries, hashtags = [], cursor }) {
     const tags = [...new Set([...hashtags, ...queries].map(toHashtag).filter(Boolean))].slice(0, 6);
     if (config.providerMode === 'mock') return mockPage('instagram', queries, cursor);
-    if (!config.instagram.token || !config.instagram.userId) throw new Error('Instagram credentials are not configured.');
+    if (!config.instagram.token || !config.instagram.userId) {
+      throw Object.assign(new Error('Instagram credentials are not configured.'), { noRetry: true });
+    }
 
     const state = cursor ? JSON.parse(cursor) : { t: 0, a: null };
     while (state.t < tags.length) {

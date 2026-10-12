@@ -2,6 +2,11 @@ import * as cheerio from 'cheerio';
 import { safeFetchHtml } from '../utils/safeFetch.js';
 import { assertSafeUrl } from '../utils/urlGuard.js';
 import { AppError } from '../errors.js';
+import { TtlCache } from '../utils/cache.js';
+import { config } from '../config.js';
+
+const pageCache = new TtlCache({ max: 200, ttlMs: config.cacheTtlMs });
+export const clearProductCache = () => pageCache.clear();
 
 const clean = (s) => (s ? String(s).replace(/\s+/g, ' ').trim() : '');
 
@@ -54,16 +59,20 @@ export async function resolveProduct(input) {
   if (!looksLikeUrl(raw)) {
     return { kind: 'name', title: raw, description: '', imageUrl: null, brand: '', sourceUrl: null };
   }
-  const { html, finalUrl } = await safeFetchHtml(raw);
-  const parsed = parseProductHtml(html, finalUrl);
-  if (!parsed.title) throw new AppError(422, 'NO_PRODUCT_INFO', 'Could not find a product title on that page.');
-  // the image is sent to the vision model, so it must pass the same URL checks
-  if (parsed.imageUrl) {
-    try {
-      await assertSafeUrl(parsed.imageUrl);
-    } catch {
-      parsed.imageUrl = null;
+  // The same product link is fetched and parsed once; repeat searches reuse it.
+  const product = await pageCache.getOrSet(raw, async () => {
+    const { html, finalUrl } = await safeFetchHtml(raw);
+    const parsed = parseProductHtml(html, finalUrl);
+    if (!parsed.title) throw new AppError(422, 'NO_PRODUCT_INFO', 'Could not find a product title on that page.');
+    // the image is sent to the vision model, so it must pass the same URL checks
+    if (parsed.imageUrl) {
+      try {
+        await assertSafeUrl(parsed.imageUrl);
+      } catch {
+        parsed.imageUrl = null;
+      }
     }
-  }
-  return { kind: 'link', ...parsed, sourceUrl: finalUrl };
+    return { kind: 'link', ...parsed, sourceUrl: finalUrl };
+  });
+  return { ...product };
 }
