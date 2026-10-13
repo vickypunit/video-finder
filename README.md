@@ -213,3 +213,5 @@ strong matches, a repeat-search proof (0 videos repeated) and good / bad example
  
 ## Note on test evidence 
 The evidence in docs/TEST_EVIDENCE.md was generated in mock (sample-data) mode, because I could not finish the Meta/Instagram app setup in time. Live mode is implemented but has not been tested with real keys yet. 
+ 
+Demo video: https://drive.google.com/file/d/1FmJclbxE-6dQhAG7GqhCDwg94m3h6-TJ/view?usp=drive_link 
