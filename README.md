@@ -210,3 +210,6 @@ strong matches, a repeat-search proof (0 videos repeated) and good / bad example
 3. Pin resolved IPs for outbound fetches.
 4. A labelled set of good/bad matches to tune the threshold and weights instead of hand-picking them.
 5. Users, per-user history and saved shortlists; more sources (YouTube Shorts) behind the same collector interface.
+ 
+## Note on test evidence 
+The evidence in docs/TEST_EVIDENCE.md was generated in mock (sample-data) mode, because I could not finish the Meta/Instagram app setup in time. Live mode is implemented but has not been tested with real keys yet. 
